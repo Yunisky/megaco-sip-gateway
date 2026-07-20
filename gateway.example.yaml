@@ -1,0 +1,40 @@
+sip:
+  listen: "0.0.0.0:5060"
+  bind_device: ""
+  advertised_address: ""
+  domain: "h248-sip-gateway.local"
+  trunk_uri: "sip:h248-line@ippbx.local"
+  outbound_proxy: ""
+  user_agent: "h248-sip-gateway"
+
+h248:
+  listen: "0.0.0.0:2944"
+  bind_device: ""
+  transport: "udp"
+  encoding: "text"
+  version: 1
+  mg_id: "mgw-1"
+  mgc: ""
+  backup_mgc: ""
+  service_change_method: "Restart"
+  service_change_reason: "901 Cold Boot"
+  service_change_profile: ""
+  service_change_address: ""
+  service_change_retry_seconds: 5
+  service_change_max_attempts: 3
+  mgc_failure_timeout_seconds: 360
+  origination_stabilization_seconds: 5
+  digit_report_delay_milliseconds: 200
+  physical_termination: "aaln/1"
+  ephemeral_termination_prefix: "RTP/"
+
+media:
+  rtp_ip: "127.0.0.1"
+  h248_rtp_ip: "127.0.0.1"
+  port_min: 20000
+  port_max: 29998
+  dtmf_payload_type: 101
+  h248_dtmf_payload_type: 102
+  h248_dtmf_mode: "rfc4733"
+  ptime_ms: 20
+  codecs: [PCMA/8000, PCMU/8000]

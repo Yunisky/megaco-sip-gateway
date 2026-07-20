@@ -1,0 +1,6 @@
+services:
+  gateway:
+    build: .
+    network_mode: host
+    volumes:
+      - ./gateway.example.yaml:/app/gateway.yaml:ro

@@ -1,0 +1,28 @@
+ARG BASE_IMAGE=alpine:3.20
+FROM ${BASE_IMAGE}
+
+RUN apk add --no-cache \
+        asterisk \
+        asterisk-sample-config \
+        asterisk-sounds-en \
+        ca-certificates \
+        gettext-envsubst
+
+COPY templates/ /opt/asterisk-lab/templates/
+COPY entrypoint.sh /usr/local/sbin/asterisk-lab-entrypoint
+
+RUN chmod 0755 /usr/local/sbin/asterisk-lab-entrypoint \
+    && mkdir -p \
+        /run/asterisk \
+        /var/lib/asterisk \
+        /var/log/asterisk \
+        /var/spool/asterisk \
+    && chown -R asterisk:asterisk \
+        /run/asterisk \
+        /var/lib/asterisk \
+        /var/log/asterisk \
+        /var/spool/asterisk
+
+EXPOSE 5062/udp 10000-10199/udp
+
+ENTRYPOINT ["/usr/local/sbin/asterisk-lab-entrypoint"]

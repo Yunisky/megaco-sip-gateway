@@ -1,0 +1,21 @@
+[Unit]
+Description=H.248 to SIP interworking gateway
+After=network-online.target NetworkManager-wait-online.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=h248gw
+Group=h248gw
+ExecStart=/usr/local/bin/h248-sip-gateway -config /etc/h248-sip-gateway/gateway.yaml
+Restart=on-failure
+RestartSec=2s
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

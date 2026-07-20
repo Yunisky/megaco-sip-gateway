@@ -1,0 +1,33 @@
+[Unit]
+Description=Asterisk lab IP-PBX for H.248/SIP gateway interop
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/asterisk-lab/asterisk-lab.env
+ExecStartPre=-/usr/bin/docker rm -f h248-asterisk-lab
+ExecStart=/usr/bin/docker run --name h248-asterisk-lab \
+    --hostname h248-asterisk-lab \
+    --network host \
+    --env-file /etc/asterisk-lab/asterisk-lab.env \
+    --cap-drop ALL \
+    --cap-add CHOWN \
+    --cap-add DAC_OVERRIDE \
+    --cap-add SETGID \
+    --cap-add SETUID \
+    --security-opt no-new-privileges \
+    --pids-limit 256 \
+    --memory 768m \
+    --log-driver journald \
+    h248-asterisk-lab:20
+ExecStop=/usr/bin/docker stop --time 20 h248-asterisk-lab
+ExecStopPost=-/usr/bin/docker rm -f h248-asterisk-lab
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

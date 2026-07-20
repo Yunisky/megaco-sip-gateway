@@ -1,0 +1,41 @@
+# Loopback-only development profile. Copy to the ignored gateway.local.yaml.
+sip:
+  listen: "127.0.0.1:15060"
+  bind_device: ""
+  advertised_address: "127.0.0.1:15060"
+  domain: "localhost"
+  trunk_uri: "sip:h248-line@127.0.0.1:25060"
+  outbound_proxy: "127.0.0.1:25060"
+  user_agent: "h248-sip-gateway-local"
+
+h248:
+  listen: "127.0.0.1:12944"
+  bind_device: ""
+  transport: "udp"
+  encoding: "text"
+  version: 1
+  mg_id: "mgw-local"
+  mgc: ""
+  backup_mgc: ""
+  service_change_method: "Restart"
+  service_change_reason: "901 Cold Boot"
+  service_change_profile: ""
+  service_change_address: ""
+  service_change_retry_seconds: 5
+  service_change_max_attempts: 3
+  mgc_failure_timeout_seconds: 30
+  origination_stabilization_seconds: 1
+  digit_report_delay_milliseconds: 100
+  physical_termination: "aaln/1"
+  ephemeral_termination_prefix: "RTP/"
+
+media:
+  rtp_ip: "127.0.0.1"
+  h248_rtp_ip: "127.0.0.1"
+  port_min: 20000
+  port_max: 29998
+  dtmf_payload_type: 101
+  h248_dtmf_payload_type: 102
+  h248_dtmf_mode: "rfc4733"
+  ptime_ms: 20
+  codecs: [PCMA/8000, PCMU/8000]

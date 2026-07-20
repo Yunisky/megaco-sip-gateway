@@ -1,0 +1,41 @@
+# RFC 5737 documentation addresses only. Replace every address before use.
+sip:
+  listen: "192.0.2.10:5060"
+  bind_device: ""
+  advertised_address: "192.0.2.10:5060"
+  domain: "192.0.2.10"
+  trunk_uri: "sip:6001@192.0.2.20"
+  outbound_proxy: "192.0.2.20:5061"
+  user_agent: "h248-sip-gateway"
+
+h248:
+  listen: "198.51.100.10:2944"
+  bind_device: "vrf-h248"
+  transport: "udp"
+  encoding: "text"
+  version: 1
+  mg_id: "[198.51.100.10]:2944"
+  mgc: "198.51.100.20:2944"
+  backup_mgc: "198.51.100.21:2944"
+  service_change_method: "Restart"
+  service_change_reason: "901 Cold Boot"
+  service_change_profile: ""
+  service_change_address: ""
+  service_change_retry_seconds: 5
+  service_change_max_attempts: 3
+  mgc_failure_timeout_seconds: 360
+  origination_stabilization_seconds: 5
+  digit_report_delay_milliseconds: 200
+  physical_termination: "A0"
+  ephemeral_termination_prefix: "RTP/"
+
+media:
+  rtp_ip: "192.0.2.10"
+  h248_rtp_ip: "198.51.100.10"
+  port_min: 20000
+  port_max: 29998
+  dtmf_payload_type: 101
+  h248_dtmf_payload_type: 102
+  h248_dtmf_mode: "inband"
+  ptime_ms: 20
+  codecs: [PCMA/8000]

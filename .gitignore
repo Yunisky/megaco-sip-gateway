@@ -1,0 +1,21 @@
+# Build outputs
+/h248-sip-gateway
+/gateway
+/sip-probe
+/h248-probe
+/dist/
+/bin/
+
+# Local config and runtime files
+gateway.yaml
+gateway.local.yaml
+/deploy/asterisk-lab/asterisk-lab.env
+backupsettings*.conf
+*.password
+*.pcap
+*.log
+*.pid
+
+# Test/cache artifacts
+coverage.out
+.DS_Store
