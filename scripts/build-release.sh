@@ -44,15 +44,29 @@ for arch in amd64 arm64; do
 
     bundle="${TMP_DIR}/h248-sip-gateway-${VERSION}-linux-${arch}"
     mkdir -p "$bundle"
+    mkdir -p "$bundle/docs"
+    mkdir -p "$bundle/deploy/asterisk-lab"
+    mkdir -p "$bundle/deploy/huawei-ar6121e"
+    mkdir -p "$bundle/deploy/spes"
     cp "${OUT_DIR}/${asset}" "${bundle}/h248-sip-gateway"
     cp scripts/install.sh "${bundle}/install.sh"
     cp gateway.example.yaml "${bundle}/gateway.example.yaml"
     cp deploy/systemd/h248-sip-gateway.service "${bundle}/h248-sip-gateway.service"
     cp LICENSE "${bundle}/LICENSE"
     cp README.md "${bundle}/README.md"
+    cp README.zh-CN.md "${bundle}/README.zh-CN.md"
     cp docs/H248-SIP-INTERWORKING.md "${bundle}/H248-SIP-INTERWORKING.md"
+    cp docs/H248-SIP-INTERWORKING.zh-CN.md \
+        "${bundle}/H248-SIP-INTERWORKING.zh-CN.md"
     cp docs/DEPLOYMENT.md "${bundle}/DEPLOYMENT.md"
+    cp docs/DEPLOYMENT.zh-CN.md "${bundle}/DEPLOYMENT.zh-CN.md"
     cp docs/SIP-PBX-INTEROP.md "${bundle}/SIP-PBX-INTEROP.md"
+    cp docs/SIP-PBX-INTEROP.zh-CN.md "${bundle}/SIP-PBX-INTEROP.zh-CN.md"
+    cp docs/*.md "${bundle}/docs/"
+    cp deploy/asterisk-lab/README*.md "${bundle}/deploy/asterisk-lab/"
+    cp deploy/huawei-ar6121e/README*.md \
+        "${bundle}/deploy/huawei-ar6121e/"
+    cp deploy/spes/README*.md "${bundle}/deploy/spes/"
     (
         cd "$bundle"
         if command -v sha256sum >/dev/null 2>&1; then

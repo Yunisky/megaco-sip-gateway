@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # Asterisk lab IP-PBX
 
 This deployment provides a temporary, reproducible SIP PBX for exercising the

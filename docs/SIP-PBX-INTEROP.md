@@ -1,42 +1,48 @@
-# SIP PBX 对接说明
+[English](SIP-PBX-INTEROP.md) | [中文](SIP-PBX-INTEROP.zh-CN.md)
 
-本文说明任意 SIP PBX 如何通过无注册、源 IP 识别的 SIP 中继对接
-`h248-sip-gateway`。Huawei VRP、Asterisk/PJSIP 和 FreePBX 配置均为
-匿名化通用参考，不包含生产地址、端口或号码。
+# SIP PBX Interoperability Guide
 
-## 1. 对接模型
+This document explains how any SIP PBX can connect to
+`h248-sip-gateway` through a registration-free, source-IP-authenticated SIP
+trunk. The Huawei VRP, Asterisk/PJSIP, and FreePBX configurations are
+anonymized, generic references and contain no production addresses, ports, or
+numbers.
+
+## 1. Interworking model
 
 ```text
-运营商呼入：H.248 MGC → gateway → SIP INVITE → PBX 入局路由 → 分机/队列
-企业外呼：分机 → PBX 出局路由 → SIP INVITE → gateway → H.248 MGC
+Carrier inbound: H.248 MGC -> gateway -> SIP INVITE -> PBX inbound route -> extension/queue
+Enterprise outbound: extension -> PBX outbound route -> SIP INVITE -> gateway -> H.248 MGC
 ```
 
-网关不向 PBX 注册。双方根据固定源 IP 建立 SIP 中继：
+The gateway does not register with the PBX. The two sides establish a SIP trunk
+using fixed source addresses:
 
-- PBX 将网关 IP:端口定义为无注册 SIP Trunk；
-- 网关用 `sip.outbound_proxy` 指向 PBX 的中继监听地址；
-- PBX 只接受来自网关 IP 的入局 SIP；
-- 网关主机防火墙只接受来自 PBX IP 的 SIP/RTP。
+- the PBX defines the gateway IP:port as a registration-free SIP Trunk;
+- the gateway points `sip.outbound_proxy` to the PBX trunk listener;
+- the PBX accepts inbound SIP only from the gateway IP;
+- the gateway host firewall accepts SIP/RTP only from the PBX IP.
 
-## 2. SIP 与媒体参数
+## 2. SIP and media parameters
 
-| 参数 | 推荐值 |
+| Parameter | Recommended value |
 |---|---|
-| SIP 传输 | UDP |
-| SIP 中继认证 | 无注册、源 IP 识别 |
-| Codec | PCMA/G.711A，payload 8 |
+| SIP transport | UDP |
+| SIP trunk authentication | No registration; identify by source IP |
+| Codec | PCMA/G.711A, payload 8 |
 | Packetization | 20 ms |
 | DTMF | RFC4733/RFC2833 telephone-event |
-| SIP RTP | PBX 和网关之间可路由的实际地址 |
-| NAT | 尽量禁用；如存在必须保证 Via/Contact/SDP 都可达 |
-| Early media | 允许 183 + SDP 和带内回铃音 |
-| CANCEL | 必须正确返回 200，并对原 INVITE 返回 487 |
-| Re-INVITE/UPDATE | 允许媒体更新；不要强制转成不支持的 Codec |
+| SIP RTP | Real, routable addresses between the PBX and gateway |
+| NAT | Prefer disabled; if present, all Via/Contact/SDP addresses must remain reachable |
+| Early media | Permit 183 + SDP and in-band ringback |
+| CANCEL | Return 200 correctly and return 487 for the original INVITE |
+| Re-INVITE/UPDATE | Permit media updates; do not force an unsupported Codec |
 
-运营商侧固定使用 PCMA 时，PBX 必须允许 PCMA。即使 PBX 终端同时提供
-Opus、G.722 或 PCMU，也应保留 PCMA；网关不做编解码转码。
+When the carrier leg uses PCMA, the PBX must allow PCMA. Even if its endpoints
+also offer Opus, G.722, or PCMU, retain PCMA in the offer, preferably first. The
+gateway does not transcode speech Codecs.
 
-## 3. 网关 SIP 配置
+## 3. Gateway SIP configuration
 
 ```yaml
 sip:
@@ -54,35 +60,44 @@ media:
   h248_dtmf_mode: "rfc4733"
 ```
 
-字段关系：
+Field relationships:
 
-- `listen`：PBX 外呼 INVITE 的目的地址；
-- `advertised_address`：网关放入 Via/Contact 的地址；
-- `trunk_uri`：运营商呼入时，网关生成的 SIP Request-URI 和初始 To；
-- `outbound_proxy`：该 INVITE 实际发送到的 PBX 地址。
-- `media.h248_dtmf_mode`：只控制网关发往 H.248 运营商侧的 DTMF 表示；
-  PBX 侧始终可以继续使用 RFC4733/RFC2833。只有最终 H.248 媒体描述符
-  不接受 telephone-event 时才使用 `inband`。
+- `listen` is the destination of PBX-originated INVITEs;
+- `advertised_address` is the gateway address placed in Via and Contact;
+- `trunk_uri` supplies the SIP Request-URI and initial To for a
+  carrier-originated call;
+- `outbound_proxy` is the PBX address to which that INVITE is actually sent;
+- `media.h248_dtmf_mode` controls only the DTMF representation sent from the
+  gateway toward the H.248 carrier leg. The PBX may continue to use
+  RFC4733/RFC2833 in either mode. Use `inband` only when the final H.248 media
+  descriptor does not accept `telephone-event`.
 
-Request-URI 和实际发送地址可以不同。例如 PBX 要求 URI 是
-`sip:6001@pbx.example`，但无注册中继监听在 `PBX_IP:5061`。
+The Request-URI and actual destination can differ. For example, the PBX may
+require `sip:6001@pbx.example` in the URI while its registration-free trunk
+listens at `PBX_IP:5061`.
 
-## 4. PBX 通用配置步骤
+## 4. Generic PBX configuration procedure
 
-1. 创建一个 UDP、无注册、按源 IP 识别的 SIP 中继；
-2. 中继对端填写网关的 `sip.listen` 地址；
-3. 只启用 PCMA/G.711A，或至少把 PCMA 放在优先列表；
-4. DTMF 选择 RFC4733/RFC2833；
-5. 创建入局路由，把 `sip.trunk_uri` 中的号码送到目标分机、振铃组或 IVR；
-6. 创建出局路由，把允许的号码模式送到该中继，不要自动添加未约定的出局字冠；
-7. 确保 PBX 的内部号码拨号计划确实包含目标分机范围；
-8. 限制该中继只接受网关源 IP，限制呼叫号码范围和并发数；
-9. PBX SDP 必须公布网关可达的 RTP 地址，而不是管理地址或不可达私网地址。
+1. Create a UDP SIP trunk with no registration, identified by source IP.
+2. Set the trunk peer to the gateway's `sip.listen` address.
+3. Enable only PCMA/G.711A, or at least place PCMA first in the preference list.
+4. Select RFC4733/RFC2833 for DTMF.
+5. Create an inbound route that sends the number in `sip.trunk_uri` to the
+   destination extension, ring group, queue, or IVR.
+6. Create an outbound route that sends only allowed number patterns to this
+   trunk, without adding an unagreed access prefix.
+7. Confirm that the PBX internal dial plan actually includes the destination
+   extension range.
+8. Restrict the trunk to the gateway source IP, permitted number classes, and
+   an appropriate concurrency limit.
+9. Ensure the PBX SDP advertises an RTP address reachable by the gateway, not a
+   management address or an unreachable private address.
 
-## 5. Huawei VRP 配置框架
+## 5. Huawei VRP configuration outline
 
-以下是经过匿名化处理的命令框架。命令树会随型号、VRP 版本和许可证变化，
-请用设备的上下文帮助确认后再提交：
+The following is an anonymized command outline. The command tree differs by
+model, VRP release, and license. Verify each command with context-sensitive
+device help before committing it:
 
 ```text
 voice
@@ -120,29 +135,38 @@ voice
   digit-length INTERNAL_MIN_LENGTH INTERNAL_MAX_LENGTH
 ```
 
-关键点：
+Key points:
 
-- 华为 `pbxuser` 存在并注册，不代表其号码已经进入拨号计划；
-- 必须有匹配内部分机范围的 `callprefix INTERNAL`；
-- `attribute 0` 是 `Internal dialing`，不能误用 `attribute 1 Local dialing`；
-- 缺少内部 callprefix 时，华为返回 `404 Not Found` 和
-  `Q.850 cause=1 Unallocated number`；
-- 中继的 Enterprise、Dn-set 与 PBX 用户必须一致；
-- `display voice trace` 中的 `Callee number analysis failed` 是最直接的
-  诊断证据。
+- the existence and registration of a Huawei `pbxuser` does not automatically
+  add its number to the dial plan;
+- a matching `callprefix INTERNAL` is required for the internal extension
+  range;
+- `attribute 0` means `Internal dialing`; do not confuse it with `attribute 1
+  Local dialing`;
+- without the internal callprefix, Huawei returns `404 Not Found` and
+  `Q.850 cause=1 Unallocated number`;
+- the trunk Enterprise and Dn-set must be consistent with the PBX user;
+- `Callee number analysis failed` in `display voice trace` is the most direct
+  diagnostic evidence.
 
-外拨号码分析应按企业所在地和运营商工单拆为窄范围 `callprefix`，全部指向
-`H248GW`。不要把现场的客服、手机、长途或市话前缀写入公共仓库。若内部分机
-前缀与外线号码前缀重叠，应把外线规则拆成更长、更具体的前缀，并分别验证
-内部短号与外线长号。除非企业拨号策略明确要求，不要隐式增加或删除接入码。
+Split outbound number analysis into narrowly scoped `callprefix` entries based
+on enterprise location and the carrier work order, and route all permitted
+entries to `H248GW`. Do not publish live customer-service, mobile, toll, or
+local-number prefixes in the public repository. If an internal extension prefix
+overlaps an outside-line prefix, define longer, more specific outside routes
+and test both the internal short number and the outside long number. Do not add
+or remove an access code implicitly unless the enterprise dialing policy
+explicitly requires it.
 
-Huawei 设备侧的匿名化配置框架见 `deploy/huawei-ar6121e/README.md`。
+The anonymized Huawei-side outline is also documented in
+[`deploy/huawei-ar6121e/README.md`](../deploy/huawei-ar6121e/README.md).
 
-## 6. Asterisk/PJSIP 示例
+## 6. Asterisk/PJSIP example
 
-以下示例使用网关源 IP 识别中继。替换所有大写占位符。
+This example identifies the trunk by the gateway source IP. Replace every
+uppercase placeholder.
 
-`pjsip.conf`：
+`pjsip.conf`:
 
 ```ini
 [transport-udp]
@@ -170,10 +194,11 @@ endpoint=h248gw
 match=GATEWAY_IP/32
 ```
 
-如果配置解析器不允许 endpoint 与 aor 同名，可把 aor 改名为
-`h248gw-aor`，并同步修改 endpoint 的 `aors=`。
+If the configuration parser does not allow an endpoint and aor to have the
+same name, rename the aor to `h248gw-aor` and update the endpoint's `aors=`
+setting accordingly.
 
-`extensions.conf`：
+`extensions.conf`:
 
 ```ini
 [from-h248gw]
@@ -187,7 +212,7 @@ exten => _9X.,1,NoOp(H.248 carrier outbound call)
  same => n,Hangup()
 ```
 
-网关对应配置：
+Corresponding gateway configuration:
 
 ```yaml
 sip:
@@ -195,98 +220,113 @@ sip:
   outbound_proxy: "PBX_IP:PBX_TRUNK_PORT"
 ```
 
-## 7. FreePBX 对接要点
+## 7. FreePBX integration
 
-FreePBX 中创建 PJSIP Trunk：
+Create a PJSIP Trunk in FreePBX:
 
-- Authentication：None；
-- Registration：None；
-- SIP Server：网关 IP；
-- SIP Server Port：网关 `sip.listen` 端口；
-- Match (Permit)：网关 IP/32；
-- Codecs：只启用 alaw，或把 alaw 放在第一位；
-- DTMF Mode：RFC4733；
-- Direct Media：关闭；
-- From Domain/Contact User：按本地号码计划设置，不要把号码改成网关无法解析的
-  字符串。
+- Authentication: None;
+- Registration: None;
+- SIP Server: gateway IP;
+- SIP Server Port: the gateway `sip.listen` port;
+- Match (Permit): gateway IP/32;
+- Codecs: enable only alaw, or place alaw first;
+- DTMF Mode: RFC4733;
+- Direct Media: disabled;
+- From Domain/Contact User: follow the local number plan, and do not transform
+  numbers into strings the gateway cannot parse.
 
-随后创建：
+Then create:
 
-- Inbound Route：DID 等于网关 `trunk_uri` 的用户部分，目的地为分机/队列；
-- Outbound Route：允许的移动号码或 E.164 模式，Trunk 选择 H248GW。
+- an Inbound Route whose DID matches the user part of the gateway `trunk_uri`,
+  with an extension, queue, or other destination;
+- an Outbound Route for the permitted mobile or E.164 patterns, selecting the
+  H248GW trunk.
 
-## 8. 呼叫验收
+## 8. Call acceptance tests
 
-| 测试 | 预期结果 |
+| Test | Expected result |
 |---|---|
-| PBX 外呼 | 100/183/200/ACK，双向 PCMA RTP |
-| PBX 侧挂机 | SIP BYE，H.248 `al/on`，资源释放 |
-| 运营商侧挂机 | H.248 释放，网关向 PBX 发 BYE |
-| 外线呼入 | 100/180/200，分机振铃并可双向通话 |
-| 振铃中外网挂机 | CANCEL 200、INVITE 487、ACK |
-| 挂机后立即再次呼入 | 新 Context，正常 180，不返回忙 |
-| DTMF | `rfc4733` 时 payload 正确协商/转换；`inband` 时运营商侧只出现 PCMA 双音且 IVR 响应 |
+| PBX outbound | 100/183/200/ACK and bidirectional PCMA RTP |
+| PBX-side release | SIP BYE, H.248 `al/on`, and resource release |
+| Carrier-side release | H.248 release and gateway-originated BYE to the PBX |
+| Carrier inbound | 100/180/200, extension ringing, answer, and two-way audio |
+| Carrier release while ringing | CANCEL 200, INVITE 487, and ACK |
+| Immediate inbound call after release | New Context, normal 180, and no busy response |
+| DTMF | With `rfc4733`, correct payload negotiation/rewriting; with `inband`, only PCMA dual tones on the carrier leg and a responsive IVR |
 
-## 9. 常见故障
+## 9. Troubleshooting
 
 ### 404 / Q.850 cause 1
 
-PBX 已收到中继 INVITE，但被叫号码不在拨号计划。检查：
+The PBX received the trunk INVITE, but the called number is absent from its dial
+plan. Check:
 
-- Request-URI 和 To 的用户部分；
-- PBX 入局 DID；
-- 内部分机前缀；
-- Enterprise/Dn-set/tenant；
-- 中继 callsource 或入局号码映射。
+- the Request-URI and To user parts;
+- the PBX inbound DID;
+- the internal extension prefix;
+- Enterprise/Dn-set/tenant;
+- trunk callsource or inbound number mapping.
 
-### 486 或挂机后一直忙
+### 486 or persistent busy after release
 
-检查前一个呼叫是否完成：
+Confirm that the preceding call completed:
 
-- SIP BYE 或 CANCEL；
-- CANCEL 的 200 和 INVITE 的 487/ACK；
-- H.248 `al/on` Reply；
-- Context、逻辑中继电路和 RTP 端口回到 Idle；
-- PBX 是否重传旧 INVITE。
+- SIP BYE or CANCEL;
+- CANCEL 200 and INVITE 487/ACK;
+- H.248 `al/on` Reply;
+- Context, logical trunk circuit, and RTP ports returned to Idle;
+- the PBX is not retransmitting an old INVITE.
 
-### 单通或无声
+### One-way or no audio
 
-检查双方 SDP：
+Check both SDP bodies:
 
-- `c=` 地址是否从对端网络可达；
-- RTP 端口是否在防火墙允许范围；
-- PBX 是否选中 PCMA/PT8；
-- PBX 是否把终端不可达地址直接透传给网关；
-- 网关日志中两方向 RTP 包计数是否都增长。
+- each `c=` address is reachable from the peer network;
+- RTP ports are inside the firewall allowlist;
+- the PBX selected PCMA/PT8;
+- the PBX is not passing an endpoint's unreachable address directly to the
+  gateway;
+- packet counters in both RTP directions increase in the gateway logs.
 
-### 呼入正常、外呼无进展
+### Inbound works, but outbound makes no progress
 
-检查运营商 DigitMap、摘机稳定窗口、被叫号码格式和 H.248 `dd/ce` 送号完成
-事件。不要在网关刚 ServiceChange 完成的同一毫秒发起第一通外呼。
+Check the carrier DigitMap, off-hook stabilization window, called-number format,
+and the H.248 `dd/ce` digit-completion event. Do not originate the first call in
+the same millisecond in which gateway ServiceChange completes.
 
-### 通话正常但 IVR 不响应按键
+### Audio works, but the IVR does not respond to keys
 
-按媒体实际协商结果排查，不要只看 PBX 页面上的 DTMF 模式：
+Troubleshoot the actual media negotiation, not only the DTMF setting displayed
+by the PBX interface:
 
-1. 检查 SIP offer/answer 中 `telephone-event` 的 payload 和 8000 Hz 时钟；
-2. 抓取 PBX→网关 RTP，确认按键产生短的 RFC4733 事件包，事件码、duration
-   和 End 位完整；
-3. 检查 MGC 最后一次 H.248 Modify 的 Local/Remote Descriptor，而不只是
-   首次 Add；确认最终描述符是否仍包含 `telephone-event`；
-4. 在 `rfc4733` 模式下，确认网关→运营商事件包使用 MGC 最终接受的 payload；
-5. 如果 RFC4733 包完整到达但 IVR 仍无响应，或最终 H.248 SDP 只保留
-   PCMA/PT8，把 `media.h248_dtmf_mode` 改为 `inband`，校验配置并重启。
+1. Check the `telephone-event` payload and 8000 Hz clock in the SIP
+   offer/answer.
+2. Capture PBX-to-gateway RTP and confirm each key produces a short RFC4733
+   event with a valid event code, duration, and End bit.
+3. Inspect the Local/Remote Descriptor in the MGC's final H.248 Modify, not only
+   the initial Add. Confirm whether the final descriptor still includes
+   `telephone-event`.
+4. In `rfc4733` mode, confirm that gateway-to-carrier event packets use the
+   payload ultimately accepted by the MGC.
+5. If complete RFC4733 packets arrive but the IVR still ignores them, or if the
+   final H.248 SDP retains only PCMA/PT8, change `media.h248_dtmf_mode` to
+   `inband`, validate the configuration, and restart the gateway.
 
-`inband` 模式下，SIP PBX 仍发送 RFC4733；网关将事件 0–15 合成 PCMA
-双音，H.248 Add Reply 不再广告 `telephone-event`。抓包时运营商方向应只有
-常规 172-byte（12-byte RTP 头 + 160-byte G.711A）的 PCMA RTP，而不应再
-出现 16-byte telephone-event RTP。该模式已在匿名化运营商 IVR 上实测通过。
+In `inband` mode, the SIP PBX continues to send RFC4733. The gateway synthesizes
+events 0-15 as PCMA dual tones, and its H.248 Add Reply no longer advertises
+`telephone-event`. A carrier-side capture should show only normal 172-byte
+PCMA RTP packets (12-byte RTP header plus 160-byte G.711A payload), with no
+16-byte telephone-event RTP packets. This mode was validated against an
+anonymized carrier IVR.
 
-## 10. 安全建议
+## 10. Security recommendations
 
-- PBX 和网关双方都按源 IP 限制 SIP；
-- 只允许业务需要的出局号码模式；
-- 限制中继并发数；
-- 配置和日志目录只允许 root/服务账户读取；
-- 不把 SIP 分机密码、路由器配置、运营商工单或 PCAP 提交到 Git；
-- 对公网或跨不可信网络的部署，应在实现 SIP TLS/SRTP 或外层 VPN 后再使用。
+- restrict SIP by source IP on both the PBX and gateway;
+- allow only the outbound number patterns required by the business;
+- limit trunk concurrency;
+- allow only root and the service account to read configuration and log
+  directories;
+- never commit SIP extension passwords, router configurations, carrier work
+  orders, or PCAP files to Git;
+- for public or otherwise untrusted networks, deploy only after adding SIP
+  TLS/SRTP support or an outer VPN.

@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # Huawei AR6121E SIP PBX integration
 
 This directory contains an anonymized example for connecting a Huawei

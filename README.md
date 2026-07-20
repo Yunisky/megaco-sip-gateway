@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # H.248 ↔ SIP Gateway
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -13,18 +15,24 @@ to the RFC 5737 documentation ranges and must be replaced before deployment.
 
 ## Documentation
 
-- [`docs/H248-SIP-INTERWORKING.md`](docs/H248-SIP-INTERWORKING.md): signaling,
-  call-state, media, release, and DTMF mapping;
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): VM/container networking,
-  systemd installation, rollback, firewalling, and acceptance tests;
-- [`docs/SIP-PBX-INTEROP.md`](docs/SIP-PBX-INTEROP.md): generic SIP trunk,
-  Huawei VRP, Asterisk/PJSIP, and FreePBX integration;
-- [`deploy/spes/README.md`](deploy/spes/README.md): anonymized dual-homed
-  Linux/VRF deployment example;
-- [`deploy/huawei-ar6121e/README.md`](deploy/huawei-ar6121e/README.md):
-  anonymized Huawei AR6121E interop outline;
-- [`deploy/asterisk-lab/README.md`](deploy/asterisk-lab/README.md): reproducible
-  Asterisk lab PBX.
+- H.248/SIP signaling, call state, media, release, and DTMF mapping:
+  [English](docs/H248-SIP-INTERWORKING.md) |
+  [中文](docs/H248-SIP-INTERWORKING.zh-CN.md);
+- VM/container networking, systemd installation, rollback, firewalling, and
+  acceptance tests: [English](docs/DEPLOYMENT.md) |
+  [中文](docs/DEPLOYMENT.zh-CN.md);
+- generic SIP trunk, Huawei VRP, Asterisk/PJSIP, and FreePBX integration:
+  [English](docs/SIP-PBX-INTEROP.md) |
+  [中文](docs/SIP-PBX-INTEROP.zh-CN.md);
+- anonymized dual-homed Linux/VRF deployment example:
+  [English](deploy/spes/README.md) |
+  [中文](deploy/spes/README.zh-CN.md);
+- anonymized Huawei AR6121E interop outline:
+  [English](deploy/huawei-ar6121e/README.md) |
+  [中文](deploy/huawei-ar6121e/README.zh-CN.md);
+- reproducible Asterisk lab PBX:
+  [English](deploy/asterisk-lab/README.md) |
+  [中文](deploy/asterisk-lab/README.zh-CN.md).
 
 ## Implemented behavior
 

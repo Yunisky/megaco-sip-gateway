@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # Dual-homed SPES/openEuler deployment example
 
 This is an anonymized example for a VM with separate enterprise SIP and

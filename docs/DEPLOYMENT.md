@@ -1,41 +1,47 @@
-# H.248↔SIP 网关部署说明
+[English](DEPLOYMENT.md) | [中文](DEPLOYMENT.zh-CN.md)
 
-本文适用于从 GitHub Release 在独立 Linux VM 或 host-network 容器中部署
-一条 H.248 外线。生产推荐 systemd + 独立 VM；每条外线部署一个实例。
+# H.248 ↔ SIP Gateway Deployment Guide
 
-## 1. 部署前需要确认的参数
+This guide covers deploying one H.248 outside line from a GitHub Release in a
+dedicated Linux VM or a host-networked container. For production, systemd on a
+dedicated VM is recommended, with one gateway instance per line.
 
-| 类别 | 必填信息 |
+## 1. Parameters to confirm before deployment
+
+| Category | Required information |
 |---|---|
-| 企业侧 | 网关 SIP IP、PBX IP/端口、入局目标号码、SIP RTP 地址和端口池 |
-| 运营商侧 | 本地 H.248 IP/掩码/网关、VRF/接口、主备 MGC、MGID、Termination |
-| 协议 | H.248 版本/传输/编码、ServiceChange、Codec、DTMF payload、ptime |
-| 安全 | PBX 与 MGC 源地址白名单、SIP/H.248/RTP 防火墙范围 |
+| Enterprise side | Gateway SIP IP, PBX IP/port, inbound destination number, and SIP-side RTP address and port pool |
+| Carrier side | Local H.248 IP/prefix/gateway, VRF/interface, primary and backup MGCs, MGID, and Termination |
+| Protocol | H.248 version/transport/encoding, ServiceChange parameters, Codec, DTMF payload, and ptime |
+| Security | PBX and MGC source-address allowlists and SIP/H.248/RTP firewall ranges |
 
-当前稳定版要求：
+The current stable release requires:
 
-- Linux + systemd；
-- H.248 UDP Text v1-v3；已实线验证的是 v1；
-- SIP UDP；
-- PBX 与运营商都支持 PCMA/G.711A；
-- 运行账户可获得 `CAP_NET_RAW`，以便使用 `SO_BINDTODEVICE`；
-- H.248 IP、SIP IP 和 SDP 中公布的地址对对应网络真实可达。
+- Linux with systemd;
+- H.248 v1-v3 text over UDP; live-line validation was performed with v1;
+- SIP over UDP;
+- PCMA/G.711A support on both the PBX and carrier sides;
+- a service account with `CAP_NET_RAW` so `SO_BINDTODEVICE` can be used;
+- H.248 and SIP addresses, including the addresses advertised in SDP, that are
+  actually reachable from their respective networks.
 
-## 2. 推荐网络结构
+## 2. Recommended network topology
 
 ```text
-企业网络 / 主路由表
+Enterprise network / main routing table
   GATEWAY_SIP_IP
-  SIP_PORT/UDP + SIP侧 RTP
+  SIP_PORT/UDP + SIP-side RTP
           |
       gateway VM
           |
-  vrf-h248 / 运营商专网
-  H248_PORT/UDP + 运营商侧 RTP
+  vrf-h248 / carrier private network
+  H248_PORT/UDP + carrier-side RTP
 ```
 
-运营商网卡应放入单独 VRF，避免运营商私网地址、默认路由或重复网段污染管理
-网络。下面是一次性 `iproute2` 示例，实际接口名、地址和表号必须替换：
+Place the carrier interface in a separate VRF so the carrier's private
+addresses, default route, or overlapping prefixes cannot affect the management
+network. The following is a one-time `iproute2` example. Replace the interface,
+addresses, and table number before use:
 
 ```sh
 ip link add vrf-h248 type vrf table 248
@@ -47,12 +53,14 @@ ip route add table 248 default via CARRIER_GATEWAY dev CARRIER_IFACE
 ip vrf exec vrf-h248 ping -c 3 PRIMARY_MGC_IP
 ```
 
-这些命令重启后不会自动保留。请使用发行版的 NetworkManager、systemd-networkd
-或网络配置系统持久化。远程服务器上修改 VRF 前必须保留带外管理或回退窗口。
+These commands do not persist across a reboot. Use NetworkManager,
+systemd-networkd, or the distribution's network configuration system to make
+them persistent. Before modifying VRF state on a remote server, retain
+out-of-band management or a tested rollback window.
 
-## 3. 获取并校验 Release
+## 3. Download and verify a Release
 
-以 `${VERSION}`、Linux amd64 为例：
+For `${VERSION}` on Linux amd64:
 
 ```sh
 VERSION=vX.Y.Z
@@ -63,13 +71,14 @@ tar -xzf "h248-sip-gateway-${VERSION}-linux-amd64.tar.gz"
 cd "h248-sip-gateway-${VERSION}-linux-amd64"
 ```
 
-arm64 主机将文件名中的 `amd64` 改为 `arm64`。也可以只下载
-`install.sh`；脚本会按主机架构下载 Release 二进制和 systemd unit，并使用
-Release 的 `checksums.txt` 验证二进制。
+On an arm64 host, replace `amd64` with `arm64` in the filename. Alternatively,
+download only `install.sh`; it downloads the Release binary and systemd unit
+for the host architecture and verifies the binary against the Release
+`checksums.txt`.
 
-## 4. 准备 gateway.yaml
+## 4. Prepare gateway.yaml
 
-复制模板：
+Copy the template:
 
 ```sh
 cp gateway.example.yaml gateway.yaml
@@ -77,86 +86,89 @@ chmod 600 gateway.yaml
 vi gateway.yaml
 ```
 
-生产最重要的字段如下：
+The most important production fields are:
 
-| 字段 | 含义 |
+| Field | Meaning |
 |---|---|
-| `sip.listen` | 网关在企业侧监听的 IP:端口 |
-| `sip.advertised_address` | SIP Via/Contact 公布的可达 IP:端口 |
-| `sip.domain` | 网关 SIP 域或地址 |
-| `sip.trunk_uri` | 运营商呼入时送给 PBX 的 Request-URI |
-| `sip.outbound_proxy` | SIP 报文实际发送到的 PBX IP:端口 |
-| `h248.listen` | 运营商分配给 MG 的本地 IP:端口 |
-| `h248.bind_device` | 运营商网卡或 VRF master，例如 `vrf-h248` |
-| `h248.mg_id` | 线上完整 MID，可能是 `[IP]:port`，不一定等于运营商工单中的逻辑 ID |
-| `h248.mgc` / `backup_mgc` | 主备 MGC IP:端口 |
-| `h248.physical_termination` | 物理线路，例如 `A0` |
-| `media.rtp_ip` | SIP/PBX 侧公布的 RTP 地址 |
-| `media.h248_rtp_ip` | 运营商 H.248 侧公布的 RTP 地址 |
-| `media.port_min/max` | 网关分配的偶数 RTP 端口范围；RTCP 使用下一个奇数端口 |
-| `media.h248_dtmf_mode` | `rfc4733` 动态协商/重写事件，或 `inband` 把 SIP RFC4733 合成为 H.248 侧 PCMA 双音 |
+| `sip.listen` | Enterprise-side IP:port on which the gateway listens |
+| `sip.advertised_address` | Reachable IP:port advertised in SIP Via/Contact |
+| `sip.domain` | Gateway SIP domain or address |
+| `sip.trunk_uri` | Request-URI sent to the PBX for carrier-originated calls |
+| `sip.outbound_proxy` | PBX IP:port to which SIP messages are actually sent |
+| `h248.listen` | Local MG IP:port assigned by the carrier |
+| `h248.bind_device` | Carrier interface or VRF master, such as `vrf-h248` |
+| `h248.mg_id` | Complete on-wire MID; it may be `[IP]:port` and need not equal the logical ID shown on the carrier work order |
+| `h248.mgc` / `backup_mgc` | Primary and backup MGC IP:port |
+| `h248.physical_termination` | Physical line, such as `A0` |
+| `media.rtp_ip` | RTP address advertised toward the SIP/PBX side |
+| `media.h248_rtp_ip` | RTP address advertised toward the carrier H.248 side |
+| `media.port_min/max` | Even RTP ports allocated by the gateway; RTCP uses the next odd port |
+| `media.h248_dtmf_mode` | `rfc4733` for dynamic event negotiation/rewriting, or `inband` to synthesize SIP RFC4733 as PCMA dual tones on the H.248 leg |
 
-匿名化配置示例可参考：
+See these anonymized examples:
 
-- `deploy/spes/gateway.example.yaml`：双网卡/VRF H.248 参数；
-- `deploy/huawei-ar6121e/gateway.example.yaml`：华为 PBX 对接方式。
+- `deploy/spes/gateway.example.yaml` for dual-interface/VRF H.248 parameters;
+- `deploy/huawei-ar6121e/gateway.example.yaml` for Huawei PBX interworking.
 
-示例中的 RFC 5737 地址不可用于生产。每条线路的 MGID、MGC、PBX、VRF 和
-媒体地址必须按工单填写。
+RFC 5737 addresses in the examples cannot be used in production. Set the MGID,
+MGCs, PBX, VRF, and media addresses for each line according to its work order.
 
-## 5. 一键安装
+## 5. One-command installation
 
-首次安装：
+First installation:
 
 ```sh
 sudo ./install.sh --version "${VERSION}" --config ./gateway.yaml
 ```
 
-如果使用解压后的离线包，脚本会自动使用包内二进制和 unit，不访问网络：
+When run from an extracted offline bundle, the script automatically uses the
+bundled binary and unit without accessing the network:
 
 ```sh
 sudo ./install.sh --config ./gateway.yaml
 ```
 
-脚本依次执行：
+The script performs these steps in order:
 
-1. 检测 Linux、systemd 和 amd64/arm64 架构；
-2. 选择包内二进制或下载指定 Release；
-3. 校验 SHA-256；
-4. 用候选二进制执行 `-check-config`；
-5. 创建无登录权限的 `h248gw` 系统账户；
-6. 把现有二进制、配置和 unit 备份到仅 root 可读的时间戳目录；
-7. 安装二进制、0640 配置和 systemd unit；
-8. 再次校验已安装配置；
-9. daemon-reload、enable、restart，并确认服务为 active。
+1. Verifies Linux, systemd, and an amd64 or arm64 architecture.
+2. Selects a bundled binary or downloads the requested Release.
+3. Verifies its SHA-256 digest.
+4. Runs `-check-config` with the candidate binary.
+5. Creates the non-login `h248gw` system account.
+6. Backs up the current binary, configuration, and unit to a timestamped,
+   root-only directory.
+7. Installs the binary, the configuration with mode 0640, and the systemd unit.
+8. Validates the installed configuration again.
+9. Runs daemon-reload, enable, and restart, then confirms the service is active.
 
-脚本不会修改接口、VRF、路由、DNS 或防火墙。仅安装、不启动：
+The script does not change interfaces, VRFs, routes, DNS, or firewall rules. To
+install without starting the service:
 
 ```sh
 sudo ./install.sh --config ./gateway.yaml --no-start
 ```
 
-## 6. 升级和回退
+## 6. Upgrade and rollback
 
-升级到指定 Release 并保留当前配置：
+Upgrade to a specified Release while retaining the current configuration:
 
 ```sh
 sudo ./install.sh --version "${VERSION}"
 ```
 
-替换配置并升级：
+Replace the configuration while upgrading:
 
 ```sh
 sudo ./install.sh --version "${VERSION}" --config ./gateway.yaml
 ```
 
-每次安装的备份位于：
+Each installation backup is stored under:
 
 ```text
 /var/lib/h248-sip-gateway/backups/YYYYMMDDTHHMMSSZ/
 ```
 
-手工回退示例：
+Example manual rollback:
 
 ```sh
 systemctl stop h248-sip-gateway
@@ -167,20 +179,25 @@ systemctl daemon-reload
 systemctl restart h248-sip-gateway
 ```
 
-## 7. 防火墙
+## 7. Firewall
 
-最小放行原则：
+Apply least-privilege rules:
 
-- 企业侧只允许 PBX IP 访问网关 SIP UDP 端口；
-- 企业侧只允许 PBX IP 访问网关 RTP/RTCP 端口池；
-- H.248 VRF 只允许主备 MGC 访问 H.248 UDP 端口；
-- H.248 VRF 允许运营商媒体地址访问 RTP/RTCP 端口池；
-- 不要把 SIP 5060 或大段 RTP 端口直接暴露给不可信网络。
+- on the enterprise side, allow only the PBX IP to reach the gateway SIP UDP
+  port;
+- on the enterprise side, allow only the PBX IP to reach the gateway RTP/RTCP
+  port pool;
+- in the H.248 VRF, allow only the primary and backup MGCs to reach the H.248
+  UDP port;
+- in the H.248 VRF, allow carrier media addresses to reach the RTP/RTCP port
+  pool;
+- do not expose SIP 5060 or a broad RTP range directly to untrusted networks.
 
-防火墙应从 `media.port_min` 覆盖到 `media.port_max + 1`，最后一个奇数
-端口用于 RTCP。不要照抄其他部署的端口池。
+The firewall range must extend from `media.port_min` through
+`media.port_max + 1`, because the final odd port is used for RTCP. Do not copy
+another deployment's port pool without review.
 
-## 8. 部署后检查
+## 8. Post-deployment checks
 
 ```sh
 /usr/local/bin/h248-sip-gateway -version
@@ -193,34 +210,37 @@ journalctl -u h248-sip-gateway -n 100 --no-pager
 ss -lunp | grep -E ':(2944|5060)'
 ```
 
-启动日志必须看到：
+Startup logs must show:
 
-- ROOT ServiceChange Reply；
-- 物理 Termination ServiceChange Reply；
-- `h248 registration active`；
-- 初始 `al/on` Reply；
-- 没有 H.248 error descriptor。
+- a ROOT ServiceChange Reply;
+- a physical-Termination ServiceChange Reply;
+- `h248 registration active`;
+- an initial `al/on` Reply;
+- no H.248 error descriptor.
 
-## 9. 生产验收矩阵
+## 9. Production acceptance matrix
 
-至少执行：
+At minimum, test:
 
-1. PBX 分机外呼、接通、双向语音；
-2. PBX 侧主动挂机；
-3. 运营商侧主动挂机；
-4. 外线呼入、PBX 振铃、接听、双向语音；
-5. 振铃未接时外网挂机，确认 `CANCEL/200/487/ACK`；
-6. 已接通呼叫释放后 2～5 秒立即再次呼入，确认不忙；
-7. 主 MGC 不可达时验证备 MGC，但必须在维护窗口执行；
-8. 重启网关后确认自动 ServiceChange 和线路恢复。
+1. PBX extension outbound call, answer, and two-way audio.
+2. PBX-side release.
+3. Carrier-side release.
+4. Carrier-originated call, PBX ringing, answer, and two-way audio.
+5. Carrier release while ringing, confirming `CANCEL/200/487/ACK`.
+6. Another inbound call two to five seconds after release, confirming the line
+   is not busy.
+7. Backup-MGC operation when the primary is unreachable, only during a
+   maintenance window.
+8. Automatic ServiceChange and line recovery after a gateway restart.
 
-日志中的 RTP 双向计数都应大于零。测试结束后 PBX 用户、H.248 Context、
-逻辑中继电路和 RTP 端口必须回到 Idle/空闲。
+Both directional RTP counters in the logs must be greater than zero. At the end
+of testing, the PBX user, H.248 Context, logical trunk circuit, and RTP ports
+must all return to Idle/free state.
 
 ## 10. Docker
 
-容器必须使用 host networking，并能看到宿主机 VRF；还需要
-`CAP_NET_RAW`。建议一条外线一个容器。示意：
+The container must use host networking, must be able to see the host VRF, and
+requires `CAP_NET_RAW`. One container per outside line is recommended:
 
 ```yaml
 services:
@@ -233,17 +253,18 @@ services:
     restart: unless-stopped
 ```
 
-如果容器平台无法提供 host networking、VRF 可见性和
-`SO_BINDTODEVICE`，应使用独立 VM。
+Use a dedicated VM if the container platform cannot provide host networking,
+VRF visibility, and `SO_BINDTODEVICE`.
 
-## 11. 故障排查
+## 11. Troubleshooting
 
-- 没有 ServiceChange Reply：检查 VRF 路由、源 IP、MGC IP/端口、MID 和
-  运营商 ACL；
-- PBX 返回 404/Q.850 cause 1：检查 PBX 入局号码、拨号计划、企业/DN-set
-  和内部号码 callprefix；
-- 单通：检查两侧 SDP `c=` 地址、RTP 防火墙、VRF 绑定和双向 RTP 计数；
-- 挂机后忙：检查 `al/on` Reply、BYE/CANCEL、487 ACK、Context 释放和
-  INVITE 事务是否到期；
-- 配置有效但服务启动失败：检查本地 IP 是否已经配置、端口是否被占用，以及
-  systemd unit 是否获得 `CAP_NET_RAW`。
+- No ServiceChange Reply: check the VRF route, source IP, MGC IP/port, MID, and
+  carrier ACL.
+- PBX returns 404/Q.850 cause 1: check the PBX inbound number, dial plan,
+  Enterprise/DN-set, and internal-number callprefix.
+- One-way or no audio: check both SDP `c=` addresses, RTP firewall rules, VRF
+  binding, and bidirectional RTP counters.
+- Line remains busy after release: check the `al/on` Reply, BYE/CANCEL, 487 ACK,
+  Context release, and INVITE transaction expiration.
+- Configuration is valid but the service does not start: check that the local
+  IP is configured, the port is free, and the systemd unit has `CAP_NET_RAW`.
